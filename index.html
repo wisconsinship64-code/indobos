@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indolokal - Game Tebak Absurd</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+    <style>
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #121214;
+            color: #fff;
+            image-rendering: pixelated;
+        }
+        .pixel-border {
+            box-shadow: 
+                -4px 0 0 0 #000,
+                4px 0 0 0 #000,
+                0 -4px 0 0 #000,
+                0 4px 0 0 #000,
+                -8px 0 0 0 #fff,
+                8px 0 0 0 #fff,
+                0 -8px 0 0 #fff,
+                0 8px 0 0 #fff;
+            margin: 8px;
+        }
+        .pixel-btn {
+            position: relative;
+            box-shadow: inset -4px -4px 0px 0px #1a1a1a;
+            transition: transform 0.05s;
+        }
+        .pixel-btn:active {
+            transform: translate(2px, 2px);
+            box-shadow: inset 2px 2px 0px 0px #1a1a1a;
+        }
+        .scanline {
+            background: linear-gradient(
+                rgba(18, 16, 16, 0) 50%, 
+                rgba(0, 0, 0, 0.25) 50%
+            );
+            background-size: 100% 4px;
+        }
+        canvas {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translate(0, 0); }
+            20% { transform: translate(-5px, 5px); }
+            40% { transform: translate(5px, -5px); }
+            60% { transform: translate(-5px, -5px); }
+            80% { transform: translate(5px, 5px); }
+        }
+        .shake {
+            animation: shake 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-2 md:p-4 bg-zinc-950 text-white scanline overflow-x-hidden">
+
+    <!-- Container Utama -->
+    <div id="game-container" class="w-full max-w-xl bg-zinc-900 border-4 border-amber-500 rounded-lg p-4 md:p-6 shadow-2xl relative">
+        
+        <!-- Header / Status -->
+        <div class="flex justify-between items-center mb-4 border-b-4 border-zinc-700 pb-3">
+            <div>
+                <h1 class="text-amber-400 text-lg md:text-xl tracking-wider">INDOLOKAL</h1>
+                <p class="text-xs text-zinc-400 font-sans mt-1">Game Tebak Pixel "Tanpa Logika Wajar"</p>
+            </div>
+            <div class="text-right">
+                <div class="text-xs text-zinc-400">SKOR</div>
+                <div id="score-display" class="text-amber-400 text-lg">0</div>
+            </div>
+        </div>
+
+        <!-- Info Nyawa & Level -->
+        <div class="flex justify-between items-center mb-3 text-xs">
+            <div class="flex items-center space-x-1" id="hearts-container">
+                <span>NYAWA:</span>
+                <span id="hearts" class="text-red-500 text-sm">❤️❤️❤️</span>
+            </div>
+            <div class="text-zinc-400">STAGE: <span id="stage-num" class="text-amber-300">1</span>/20</div>
+        </div>
+
+        <!-- Canvas Pixel Art Screen -->
+        <div class="relative bg-black border-4 border-zinc-700 rounded-md p-2 flex flex-col items-center justify-center mb-4 min-h-[220px]">
+            <canvas id="pixel-canvas" width="64" height="64" class="w-48 h-48 md:w-56 md:h-56 rounded bg-zinc-950 shadow-inner border border-zinc-800 cursor-pointer"></canvas>
+            
+            <!-- Banner Petunjuk Palsu / Alert -->
+            <div id="troll-banner" class="hidden absolute top-2 left-2 right-2 bg-amber-500 text-black text-[10px] md:text-xs p-2 text-center border-2 border-black font-bold animate-pulse z-20">
+                🔑 KUNCI RAHASIA: "Pasti yang Merah Putih!"
+            </div>
+
+            <!-- Overlay Mystery Box Locked Level -->
+            <div id="mystery-overlay" class="hidden absolute inset-0 bg-zinc-950/95 flex flex-col items-center justify-center p-4 text-center z-10">
+                <div class="text-5xl mb-2 animate-bounce">❓</div>
+                <div class="text-amber-400 text-xs font-bold mb-1">[ GAMBAR TERKUNCI BOX MISTERI ]</div>
+                <p id="mystery-hint" class="text-[10px] text-zinc-400 max-w-xs mb-3">Pemain harus melakukan aksi rahasia untuk membuka gambar ini...</p>
+                <div id="mystery-action-container"></div>
+            </div>
+        </div>
+
+        <!-- Deskripsi/Teks Soal Absurd -->
+        <div class="bg-zinc-800 border-2 border-zinc-700 p-3 rounded mb-4 min-h-[65px] flex items-center">
+            <p id="question-text" class="text-xs md:text-sm leading-relaxed text-zinc-200">
+                Memuat tebakan absurd...
+            </p>
+        </div>
+
+        <!-- Tombol Kunci Jebakan (Hint False) -->
+        <div class="mb-4 text-center">
+            <button id="hint-btn" onclick="useTrollHint()" class="pixel-btn bg-amber-600 hover:bg-amber-500 text-zinc-900 font-bold py-2 px-4 rounded border-2 border-amber-300 text-xs w-full transition flex items-center justify-center gap-2">
+                <span>🔑</span> GUNA KUNCI JAWABAN (100% PASTI BENAR*)
+            </button>
+            <p class="text-[9px] text-zinc-500 mt-1">*Jangan terlalu percaya dengan kunci toko bangunan.</p>
+        </div>
+
+        <!-- Pilihan Jawaban -->
+        <div id="options-container" class="grid grid-cols-1 md:grid-cols-2 gap-2.5 mb-4">
+            <!-- Option buttons injected by JS -->
+        </div>
+
+        <!-- Dialog Modal Popup (Custom alert replacement) -->
+        <div id="dialog-overlay" class="hidden absolute inset-0 bg-black/80 backdrop-blur-sm rounded-lg flex items-center justify-center p-4 z-50">
+            <div class="bg-zinc-900 border-4 border-amber-500 p-4 text-center max-w-xs w-full rounded">
+                <div id="dialog-title" class="text-amber-400 text-sm mb-2 font-bold">INFORMASI</div>
+                <p id="dialog-msg" class="text-xs text-zinc-300 mb-4 leading-normal"></p>
+                <button onclick="closeDialog()" class="pixel-btn bg-amber-500 text-black px-4 py-2 rounded text-xs font-bold">OKE SIAP</button>
+            </div>
+        </div>
+
+        <!-- Screen Game Over / Menang -->
+        <div id="gameover-overlay" class="hidden absolute inset-0 bg-black/95 rounded-lg flex flex-col items-center justify-center p-6 text-center z-50">
+            <h2 id="end-title" class="text-xl text-red-500 mb-2">GAME OVER</h2>
+            <p id="end-desc" class="text-xs text-zinc-300 mb-6 leading-relaxed">Kamu kena tipu logika absurd Indolokal!</p>
+            <div class="text-amber-400 text-sm mb-6">SKOR AKHIR: <span id="final-score">0</span></div>
+            <button onclick="restartGame()" class="pixel-btn bg-amber-500 hover:bg-amber-400 text-black py-3 px-6 rounded text-xs font-bold">
+                MAIN LAGI 🔄
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // --- Web Audio Synthesizer (SFX Tanpa External File) ---
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new AudioCtx();
+            }
+        }
+
+        function playSound(type) {
+            try {
+                initAudio();
+                if (!audioCtx) return;
+
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                const now = audioCtx.currentTime;
+
+                if (type === 'click') {
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(400, now);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+                    osc.start(now);
+                    osc.stop(now + 0.05);
+                } else if (type === 'correct') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(300, now);
+                    osc.frequency.exponentialRampToValueAtTime(600, now + 0.15);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                    osc.start(now);
+                    osc.stop(now + 0.2);
+                } else if (type === 'wrong') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(180, now);
+                    osc.frequency.linearRampToValueAtTime(80, now + 0.25);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                    osc.start(now);
+                    osc.stop(now + 0.25);
+                } else if (type === 'troll') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(800, now);
+                    osc.frequency.linearRampToValueAtTime(200, now + 0.3);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                } else if (type === 'unlock') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(523.25, now);
+                    osc.frequency.setValueAtTime(659.25, now + 0.08);
+                    osc.frequency.setValueAtTime(783.99, now + 0.16);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                }
+            } catch (e) {}
+        }
+
+        // --- Database Soal Absurd (20 Level Super Susah & Nyeleneh) ---
+        const questions = [
+            // Stage 1
+            {
+                id: 1,
+                question: "Benda merah-putih kotak ini sering dikira Bendera Indonesia. Tapi kalau dilihat alurnya, apa ini sebenarnya?",
+                trollHint: "PASTI 'Bendera Merah Putih'! Klik tombol pilihan itu langsung!",
+                options: [
+                    { text: "Bendera Indonesia", correct: false, reason: "SALAH! Itu Semangka lokal dipotong dua pas hari kemerdekaan!" },
+                    { text: "Semangka Merah Putih", correct: true, reason: "BENAR! Kulitnya dipotong putih, dagingnya merah. Absurd tapi dapet kan?" },
+                    { text: "Balkon Rumah Pak RT", correct: false, reason: "Zonk! Bukannya balkon, ini buah segar." },
+                    { text: "Es Krim Polos", correct: false, reason: "Salah bro, es krim bakal meleleh di piksel ini." }
+                ],
+                draw: function(ctx) {
+                    ctx.fillStyle = '#dc2626'; ctx.fillRect(8, 16, 48, 16);
+                    ctx.fillStyle = '#f8fafc'; ctx.fillRect(8, 32, 48, 16);
+                    ctx.fillStyle = '#000000'; ctx.fillRect(16, 20, 2, 4); ctx.fillRect(28, 24, 2, 4); ctx.fillRect(40, 20, 2, 4);
+                    ctx.fillStyle = '#854d0e'; ctx.fillRect(4, 12, 4, 40);
+                }
+            },
+            // Stage 2
+            {
+                id: 2,
+                question: "Benda tabung hijau piksel ini bentuknya kayak Roket Antariksa. Sebenarnya benda kuliner lokal apa ini?",
+                trollHint: "KUNCI ALAM: Ini Roket SpaceX milik Bang Elon!",
+                options: [
+                    { text: "Roket SpaceX Lokal", correct: false, reason: "SALAH! Sejak kapan NASA pindah ke warung kelontong?" },
+                    { text: "Lontong Daun Pisang", correct: true, reason: "TEPAT! Daun pisang hijau diikat tali karung. Karbohidrat penembus lapar!" },
+                    { text: "Tabung Gas 3KG", correct: false, reason: "Bukan tabung melon bro, ini makanan." },
+                    { text: "Bambu Runcing", correct: false, reason: "Hampir, tapi ini lebih enak dimakan pakai sayur lodeh." }
+                ],
+                draw: function(ctx) {
+                    ctx.fillStyle = '#15803d'; ctx.fillRect(20, 12, 24, 40);
+                    ctx.fillStyle = '#166534'; ctx.fillRect(24, 6, 16, 6); ctx.fillRect(24, 52, 16, 6);
+                    ctx.fillStyle = '#ca8a04'; ctx.fillRect(18, 24, 28, 3); ctx.fillRect(18, 36, 28, 3);
+                    ctx.fillStyle = '#e2e8f0'; ctx.fillRect(28, 58, 8, 4);
+                }
+            },
+            // Stage 3 (Kotak Misteri 1)
+            {
+                id: 3,
+                isMystery: true,
+                mysteryHint: "Kotak tanda tanya ini terkunci! Ketuk/Klik gambar kotak [?] 3 kali dengan cepat untuk menghancurkannya!",
+                clicksRequired: 3,
+                clicksDone: 0,
+                question: "Setelah kotaknya pecah... Ada objek bulat mengapung di kuah biru. Apa ini?",
+                trollHint: "KUNCI 100%: Ban Serep Mobil Angkot!",
+                options: [
+                    { text: "Ban Serep Angkot", correct: false, reason: "Kalo dimakan gigi kamu rontok!" },
+                    { text: "Kerupuk Putih Kaleng", correct: true, reason: "YUP! Kerupuk blek ikonik Indonesia yang tenggelam di kuah soto!" },
+                    { text: "Donat Gula Halus", correct: false, reason: "Salah, donat tidak renyah di dalam kuah baso." },
+                    { text: "UFO Nyasar", correct: false, reason: "UFO gak pakai minyak goreng kelapa." }
+                ],
+                draw: function(ctx) {
+                    ctx.fillStyle = '#1d4ed8'; ctx.beginPath(); ctx.arc(32, 32, 26, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = '#f1f5f9'; ctx.fillRect(18, 18, 28, 28);
+                    ctx.fillStyle = '#1d4ed8'; ctx.fillRect(28, 28, 8, 8);
+                    ctx.fillStyle = '#cbd5e1'; ctx.fillRect(22, 22, 4, 4); ctx.fillRect(38, 22, 4, 4);
+                }
+            },
+            // Stage 4
+            {
+                id: 4,
+                question: "Ada sosok kuning berjas hujan di jalanan tergenang air piksel. Siapa dia dalam kearifan lokal?",
+                trollHint: "KUNCI TOP: Pahlawan Super Yellow Jacket dari Marvel!",
+                options: [
+                    { text: "Pawang Hujan Legend", correct: false, reason: "Bukan pawang hujan, dia gak bawa sesajen." },
+                    { text: "Abang Ojol Nerjang Banjir", correct: true, reason: "MANTAP! Pahlawan pencari nafkah tanpa gentar banjir!" },
+                    { text: "Superhero Minion", correct: false, reason: "Kekecilan bro kalender lokal." },
+                    { text: "Bebek Karet Raksasa", correct: false, reason: "Kurang tepat walaupun sama-sama kuning." }
+                ],
+                draw: function(ctx) {
+                    ctx.fillStyle = '#0284c7'; ctx.fillRect(0, 44, 64, 20);
+                    ctx.fillStyle = '#eab308'; ctx.fillRect(22, 20, 20, 26);
+                    ctx.fillStyle = '#22c55e'; ctx.fillRect(24, 10, 16, 12);
+                    ctx.fillStyle = '#000'; ctx.fillRect(28, 14, 10, 4);
+                    ctx.fillStyle = '#475569'; ctx.fillRect(16, 40, 32, 8);
+                }
+            },
+            // Stage 5
+            {
+                id: 5,
+                question: "Kotak cokelat berpola titik-titik dengan aroma khas yang memecah belah selera masyarakat.",
+                trollHint: "KUNCI RAHASIA: Ini Cokelat Batangan Impor Swiss!",
+                options: [
+                    { text: "Cokelat Toblerone", correct: false, reason: "Zonk! Swiss menangis melihat ini." },
+                    { text: "Tempe Goreng Tepung", correct: true, reason: "JOSS! Kedelai fermentasi kebanggaan bangsa!" },
+                    { text: "Batu Bata Merah", correct: false, reason: "Ini makanan enak, bukan bahan pondasi rumah." },
+                    { text: "Spon Pencuci Piring", correct: false, reason: "Spon gak segurih ini pas digigit." }
+                ],
+                draw: function(ctx) {
+                    ctx.fillStyle = '#d97706'; ctx.fillRect(12, 16, 40, 32);
+                    ctx.fillStyle = '#78350f'; ctx.fillRect(18, 22, 4, 6); ctx.fillRect(32, 20, 6, 4); ctx.fillRect(24, 34, 5, 5);
+                    ctx.fillStyle = '#15803d'; ctx.fillRect(36, 12, 8, 6);
+                }
+            },
+            // Stage 6 (Kotak Misteri 2)
+            {
+                id: 6,
+                isMystery: true,
+                mysteryHint: "Sensitivitas Layar Buruk! Tekan dan Tahan (Hold) Tombol KUNCI HINT selama 2 detik untuk menyalakan senter & membuka piksel!",
+                question: "Gambar dua segitiga kuning berdampingan dengan cabe merah di pucuknya. Gambar apa ini?",
+                trollHint: "KUNCI BISIKAN: 'Pemandangan Gunung SD Legendaris'",
+                options: [
+                    { text: "Pemandangan Gambar SD", correct: false, reason: "JEBAKAN! Ini bukan gambar di kertas gambar 2B kamu!" },
+                    { text: "Dua Gunung Es Krim Vanilla", correct: false, reason: "Bukan es krim dingin." },
+                    { text: "Nasi Tumpeng Dampingan", correct: true, reason: "TEPAT! Tumpeng kembar hajatan syukuran RT!" },
+                    { text: "Atap Rumah Gadang", correct: false, reason: "Mirip sih runcingnya, tapi ini nasi kuning." }
+                ],
+                draw: function(ctx) {
+                    ctx.fillStyle = '#fef08a'; ctx.fillRect(0, 0, 64, 64);
+                    ctx.fillStyle = '#eab308'; ctx.beginPath(); ctx.moveTo(4, 54); ctx.lineTo(24, 18); ctx.lineTo(40, 54); ctx.fill();
+                    ctx.beginPath(); ctx.moveTo(24, 54); ctx.lineTo(44, 18); ctx.lineTo(60, 54); ctx.fill();
+                    ctx.fillStyle = '#dc2626'; ctx.fillRect(22, 14, 4, 6); ctx.fillRect(42, 14, 4, 6);
+                }
+            },
+            // Stage 7
+            {
+                id: 7,
+                question: "Benda bundar merah dengan garis silang di tengah yang ada di pinggir jalan. Peringatan apakah ini?",
+                trollHint: "KUNCI 100%: Rambu Dilarang Masuk (Stop)!",
+                options: [
+                    { text: "Rambu Dilarang Melintas", correct: false, reason: "SALAH! Jangan bawa-bawa teori lalu lintas di sini." },
+                    { text: "Tombol Self-Destruct", correct: false, reason: "Ini bukan film Sci-Fi." },
+                    { text: "Tutup Blek Kerupuk Cabai", correct: true, reason: "BENAR! Tutup kaleng kerupuk warna merah di warung soto!" },
+                    { text: "Permen Lollipop Raksasa", correct: false, reason: "Bukan permen rasanya gurih pedas." }
+                ],
+                draw: function(ctx) {
+                    ctx.fillStyle = '#b91c1c'; ctx.beginPath(); ctx.arc(32, 32, 24, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = '#94a3b8'; ctx.fillRect(16, 30, 32, 4); ctx.fillRect(30, 16, 4, 32);
+                    ctx.fillStyle = '#67e8f9'; ctx.fillRect(20, 20, 8, 8);
+                }
+            },
+            // Stage 8
+            {
+                id: 8,
+                question: "Piksel cokelat panjang dengan asap ngebul di ujungnya. Apa benda relaksasi khas ini?",
+                trollHint: "KUNCI: Mercon Banting Tahun Baru!",
+                options: [
+                    { text: "Mercon Banting", correct: false, reason: "Kalo dilempar gak bunyi banting bro." },
+                    { text: "Dupa Garam Kemenyan", correct: false, reason: "Bukan buat manggil mahluk halus." },
+                    { text: "Kopi Tubruk Panas Sachet", correct: true, reason: "LOH KOK BISA? Iya itu sedotan bambu di cangkir kopi hitam asap pekat!" },
+                    { text: "Kayu Manis Kuah Bakso", correct: false, reason: "Hampir benar tapi ini minuman." }
+                ],
+                draw: function(ctx) {
+                    ctx.fillStyle = '#18181b'; ctx.fillRect(16, 24, 32, 30);
+                    ctx.fillStyle = '#451a03'; ctx.fillRect(20, 26, 24, 8);
+                    ctx.fillStyle = '#78350f'; ctx.fillRect(36, 10, 4, 28);
+                    ctx.fillStyle = '#d4d4d8'; ctx.fillRect(22, 14, 4, 4); ctx.fillRect(28, 10, 4, 4);
+                }
+            },
+            // Stage 9 (Kotak Misteri 3 - Titik Rahasia)
+            {
+                id: 9,
+                isMystery: true,
+                mysteryHint: "Terkunci password fisik! Cari dan Klik judul tulisan 'INDOLOKAL' di bagian atas layar untuk memutus aliran kunci!",
+                question: "Piksel abu-abu bundar pipih berkilau di pinggir trotoar. Benda peradaban apa ini?",
+                trollHint: "PASTI: Piring Terbang Alien UFO!",
+                options: [
+                    { text: "Piring Terbang UFO", correct: false, reason: "Alien tidak beroperasi di trotoar lokal." },
+                    { text: "Uang Logam Seribu Kelapa Sawit", correct: true, reason: "BENAR! Uang koin legendaris yang sering jatuh di selokan!" },
+                    { text: "Tutup Kendang Dangdut", correct: false, reason: "Bukan alat musik bro." },
+                    { text: "Kancing Baju Raksasa", correct: false, reason: "Kancing baju siapa sebesar trotoar?" }
+                ],
+                draw: function(ctx) {
+                    ctx.fillStyle = '#94a3b8'; ctx.beginPath(); ctx.arc(32, 32, 22, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = '#ca8a04'; ctx.beginPath(); ctx.arc(32, 32, 14, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = '#fef08a'; ctx.fillRect(30, 24, 4, 16);
+                }
+            },
+            // Stage 10
+            {
+                id: 10,
+                question: "Ada dua garis putih sejajar di atas aspal hitam. Banyak orang berkerumun. Benda penyeberangan apa ini?",
+                trollHint: "KUNCI PASTI: Zebra Cross Tempat Penyeberangan!",
+                options: [
+                    { text: "Zebra Cross Penyeberangan", correct: false, reason: "TERTIPU! Zebra Cross itu banyak garisnya, ini cuma 2." },
+                    { text: "Dua Bungkus Pop Ice Blender", correct: false, reason: "Bukan pop ice di jalanan." },
+                    { text: "Sandal Jepit Swallow Putih Jatuh", correct: true, reason: "PERSIS! Sandal jepit Swallow sebelah kiri & kanan terlepas pas dikejar satpol!" },
+                    { text: "Jalur Lintasan Balap Tamiya", correct: false, reason: "Bukan arena balap." }
+                ],
+                draw: function(ctx) {
+                    ctx.fillStyle = '#334155'; ctx.fillRect(0, 0, 64, 64);
+                    ctx.fillStyle = '#f8fafc'; ctx.fillRect(14, 20, 10, 26); ctx.fillRect(40, 20, 10, 26);
+                    ctx.fillStyle = '#dc2626'; ctx.fillRect(17, 22, 4, 12); ctx.fillRect(43, 22, 4, 12);
+                }
+            },
+            // Stage 11
+            {
+                id: 11,
+                question: "Visual ungu kotak bertuliskan angka '3KG' di tengahnya. Apa ini?",
+                trollHint: "KUNCI 100%: Tabung Gas 3KG Melon!",
+                options: [
+                    { text: "Tabung Gas Melon 3KG", correct: false, reason: "SEJAK KAPAN TABUNG GAS WARNANYA UNGU FLUO?!" },
+                    { text: "Penghapus Pensil Kertas SD", correct: true, reason: "TEPAT! Penghapus bergambar angka 3KG hadiah ciki 500an!" },
+                    { text: "Batu Baterai Kompor", correct: false, reason: "Salah total." },
+                    { text: "Karton Susu Kotak", correct: false, reason: "Bukan susu kotak rasa taro." }
+                ],
+                draw: function(ctx) {
+                    ctx.fillStyle = '#a855f7'; ctx.fillRect(16, 12, 32, 40);
+                    ctx.fillStyle = '#fff'; ctx.fillRect(20, 24, 24, 16);
+                    ctx.fillStyle = '#000'; ctx.fillRect(24, 28, 16, 8);
+                }
+            },
+            // Stage 12 (Kotak Misteri 4)
+            {
+                id: 12,
+                isMystery: true,
+                mysteryHint: "Kotak Terkunci rapat! Ketik huruf 'W' di keyboard atau klik Tombol BUKA di bawah ini!",
+                customMysteryButton: true,
+                question: "Garis meliuk-liuk oranye dengan kuah merah membara di mangkok piksel. Apa ini?",
+                trollHint: "KUNCI ULTIMATE: Cacing Tanah Raksasa!",
+                options: [
+                    { text: "Cacing Tanah Kuah Pedas", correct: false, reason: "Gila ya kamu tebak cacing tanah?!" },
+                    { text: "Mie Instant Kuah Level 5", correct: true, reason: "YES! Penyelamat tanggal tua seluruh umat!" },
+                    { text: "Karet Gelang Nasi Uduk", correct: false, reason: "Karet gelang gak pakai kuah." },
+                    { text: "Benang Rajut Woll Merah", correct: false, reason: "Bukan bahan kain." }
+                ],
+                draw: function(ctx) {
+                    ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(32, 36, 24, 0, Math.PI); ctx.fill();
+                    ctx.fillStyle = '#f97316'; ctx.fillRect(16, 28, 32, 4); ctx.fillRect(18, 34, 28, 4);
+                    ctx.fillStyle = '#fef08a'; ctx.fillRect(24, 24, 16, 4);
+                }
+            },
+            // Stage 13
+            {
+                id: 13,
+                question: "Objek hitam persegi panjang dipegang orang sambil jempolnya gerak-gerak terus. Benda apakah ini?",
+                trollHint: "KUNCI PASTI: Handphone Smartphone!",
+                options: [
+                    { text: "Smartphone / HP Touchscreen", correct: false, reason: "SALAH! Ini zaman dulu, belum ada smartphone." },
+                    { text: "Remote TV Ditepuk-tepuk Baterai Habis", correct: true, reason: "BENAR KALI! Remote mati ditepuk jempol biar nyala lagi!" },
+                    { text: "Korek Api Kayu", correct: false, reason: "Bukan korek api." },
+                    { text: "Cokelat KitKat Hitam", correct: false, reason: "Ngapain cokelat dipencet-pencet jempol?" }
+                ],
+                draw: function(ctx) {
+                    ctx.fillStyle = '#27272a'; ctx.fillRect(20, 8, 24, 48);
+                    ctx.fillStyle = '#dc2626'; ctx.fillRect(28, 12, 8, 8);
+                    ctx.fillStyle = '#71717a'; ctx.fillRect(24, 24, 16, 24);
+                }
+            },
+            // Stage 14
+            {
+                id: 14,
+                question: "Piksel bentuk kerucut terbalik warna cokelat keemasan di pinggir jalan sore hari.",
+                trollHint: "KUNCI RAHASIA: Topi Petani / Caping!",
+                options: [
+                    { text: "Caping Petani Sawah", correct: false, reason: "Zonk! Petani gak jualan sore-sore di pinggir jalan." },
+                    { text: "Kue Tahu Sumedang Goreng", correct: true, reason: "MANTAP! Tahu goreng bentuk segitiga di dalam gerobak!" },
+                    { text: "Gunung Kelud Mini", correct: false, reason: "Gak masuk akal bro." },
+                    { text: "Pembatas Jalan Orange", correct: false, reason: "Bukan traffic cone." }
+                ],
+                draw: function(ctx) {
+                    ctx.fillStyle = '#b45309'; ctx.beginPath(); ctx.moveTo(32, 12); ctx.lineTo(12, 48); ctx.lineTo(52, 48); ctx.fill();
+                    ctx.fillStyle = '#fef08a'; ctx.fillRect(26, 30, 12, 10);
+                }
+            },
+            // Stage 15 (Kotak Misteri 5)
+            {
+                id: 15,
+                isMystery: true,
+                mysteryHint: "Layar Terkunci Suhu Panas! Gerakkan kursor mouse / sentuh canvas bolak-balik untuk menggosok kotak misteri!",
+                scratchRequired: 15,
+                scratchDone: 0,
+                question: "Benda putih silinder berkepala merah yang sering ditancapkan di atas kue ulang tahun?",
+                trollHint: "KUNCI PASTI: Lilin Ulang Tahun!",
+                options: [
+                    { text: "Lilin Ulang Tahun", correct: false, reason: "SALAH BANYAK! Lilin kue gak segede ini!" },
+                    { text: "Petasan Korek Cabe", correct: true, reason: "YUP! Petasan kabel merah siap meledak di bahu jalan!" },
+                    { text: "Lipstik Merah Mama", correct: false, reason: "Bukan lipstik." },
+                    { text: "Korek Api Gas Mini", correct: false, reason: "Bukan korek." }
+                ],
+                draw: function(ctx) {
+                    ctx.fillStyle = '#f8fafc'; ctx.fillRect(24, 20, 16, 36);
+                    ctx.fillStyle = '#dc2626'; ctx.fillRect(24, 10, 16, 10);
+                    ctx.fillStyle = '#eab308'; ctx.fillRect(30, 4, 4, 6);
+                }
+            },
+            // Stage 16
+            {
+                id: 16,
+                question: "Segitiga hijau bergaris-garis putih mengapung di air santan. Benda apakah ini?",
+                trollHint: "KUNCI: Ketupat Lebaran Hari Raya!",
+                options: [
+                    { text: "Ketupat Lebaran", correct: false, reason: "Salah! Ketupat gak mengapung di kuah santan bentuknya kerucut gini." },
+                    { text: "Kue Lupis Ketan Pandan", correct: true, reason: "PATEN! Kue lupis ditabur kelapa dan parutan gula merah!" },
+                    { text: "Sirip Hiu Hijau", correct: false, reason: "Hiu mana warna hijau pandan?" },
+                    { text: "Pohon Natal Mini", correct: false, reason: "Bukan pohon natal." }
+                ],
+                draw: function(ctx) {
+                    ctx.fillStyle = '#16a34a'; ctx.beginPath(); ctx.moveTo(32, 10); ctx.lineTo(14, 50); ctx.lineTo(50, 50); ctx.fill();
+                    ctx.fillStyle = '#f8fafc'; ctx.fillRect(20, 30, 24, 4); ctx.fillRect(26, 40, 12, 4);
+                }
+            },
+            // Stage 17
+            {
+                id: 17,
+                question: "Lingkaran hitam pekat berlubang di tengah, sering dipasang di tiang listrik pemukiman.",
+                trollHint: "KUNCI 100%: Ban Bekas Pembatas Jalan!",
+                options: [
+                    { text: "Ban Bekas Tiang", correct: false, reason: "Siapa ngapain masang ban di tiang listrik?" },
+                    { text: "Gulungan Kabel WiFi Indolokal", correct: true, reason: "TEPAT! Gulungan kabel optik hitam menjuntai tak berujung!" },
+                    { text: "Donat Gosong Kebakar", correct: false, reason: "Bukan donat." },
+                    { text: "Kacamata Hitam Raksasa", correct: false, reason: "Bukan kacamata." }
+                ],
+                draw: function(ctx) {
+                    ctx.fillStyle = '#18181b'; ctx.beginPath(); ctx.arc(32, 32, 22, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = '#09090b'; ctx.beginPath(); ctx.arc(32, 32, 12, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = '#3f3f46'; ctx.fillRect(30, 0, 4, 64);
+                }
+            },
+            // Stage 18
+            {
+                id: 18,
+                question: "Dua bulatan merah dengan tali di tengahnya yang dibenturkan sampai berbunyi 'ET-ET-ET-ET'.",
+                trollHint: "KUNCI: Mainan Lato-Lato Viral!",
+                options: [
+                    { text: "Lato-Lato Viral", correct: false, reason: "JEBAKAN TERBESAR! Ini tebak barang nyata bukan suara!" },
+                    { text: "Dua Buah Tomat Diikat Benang", correct: true, reason: "BENAR! Tomat dapur diikat benang kasur sama anak kecil!" },
+                    { text: "Bola Biliar Nomor 3", correct: false, reason: "Bukan bola biliar." },
+                    { text: "Earphone Merah Kabel", correct: false, reason: "Bukan earphone." }
+                ],
+                draw: function(ctx) {
+                    ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(22, 40, 10, 0, Math.PI * 2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(42, 40, 10, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = '#f8fafc'; ctx.fillRect(31, 10, 2, 30); ctx.fillRect(22, 30, 20, 2);
+                }
+            },
+            // Stage 19
+            {
+                id: 19,
+                question: "Benda putih persegi bergaris biru bertuliskan 'A+ / B / O'. Benda medis apakah ini?",
+                trollHint: "KUNCI PASTI: Kartu Golongan Darah Rumah Sakit!",
+                options: [
+                    { text: "Kartu Golongan Darah", correct: false, reason: "Salah bro, mana ada kartu medis ada gambar minyaknya." },
+                    { text: "Bungkus Kerupuk Kaleng Cetak", correct: false, reason: "Salah." },
+                    { text: "Kertas Rapor SD Nilai Palsu", correct: true, reason: "NGAKAK! Rapor sekolah yang nilainya diganti pakai pulpen!" },
+                    { text: "Kupon Jalan Sehat RT", correct: false, reason: "Bukan kupon." }
+                ],
+                draw: function(ctx) {
+                    ctx.fillStyle = '#f8fafc'; ctx.fillRect(14, 10, 36, 44);
+                    ctx.fillStyle = '#2563eb'; ctx.fillRect(18, 14, 28, 4); ctx.fillRect(18, 22, 28, 4);
+                    ctx.fillStyle = '#dc2626'; ctx.fillRect(36, 32, 10, 14);
+                }
+            },
+            // Stage 20 (FINAL STAGE)
+            {
+                id: 20,
+                question: "LEVEL FINAL: Gambar Mahakarya Piksel berwarna-warni mengkilap ini melambangkan apa bagi pemain yang sampai di sini?",
+                trollHint: "KUNCI ULTIMATE: Trophy Juara 1 Dunia!",
+                options: [
+                    { text: "Trophy Emas Juara 1", correct: false, reason: "Gak ada trophy emas buat game absurd!" },
+                    { text: "Sertifikat Bebas Dari Kebohongan Kunci Hint", correct: true, reason: "SELAMAT! Kamu telah mengalahkan 20 tebakan absurd tanpa kena mental!" },
+                    { text: "Bungkus Indomie Goreng Spesial", correct: false, reason: "Hampir benar tapi ini sertifikat kemenangan." },
+                    { text: "Pintu Keluar Dari Game", correct: false, reason: "Jangan keluar dulu, sebar game ini ke temenmu!" }
+                ],
+                draw: function(ctx) {
+                    ctx.fillStyle = '#eab308'; ctx.fillRect(16, 8, 32, 36);
+                    ctx.fillStyle = '#ca8a04'; ctx.fillRect(20, 12, 24, 28);
+                    ctx.fillStyle = '#ef4444'; ctx.fillRect(24, 44, 16, 14);
+                    ctx.fillStyle = '#f8fafc'; ctx.fillRect(24, 20, 16, 12);
+                }
+            }
+        ];
+
+        // --- Game State ---
+        let currentStage = 0;
+        let score = 0;
+        let lives = 3;
+        let trollHintUsed = false;
+        let holdTimer = null;
+
+        // --- DOM Elements ---
+        const canvas = document.getElementById('pixel-canvas');
+        const ctx = canvas.getContext('2d');
+        const stageNumEl = document.getElementById('stage-num');
+        const scoreDisplay = document.getElementById('score-display');
+        const heartsEl = document.getElementById('hearts');
+        const questionTextEl = document.getElementById('question-text');
+        const optionsContainer = document.getElementById('options-container');
+        const trollBanner = document.getElementById('troll-banner');
+        const hintBtn = document.getElementById('hint-btn');
+        const gameContainer = document.getElementById('game-container');
+        const mysteryOverlay = document.getElementById('mystery-overlay');
+        const mysteryHint = document.getElementById('mystery-hint');
+        const mysteryActionContainer = document.getElementById('mystery-action-container');
+
+        // --- Core Functions ---
+        function loadStage(index) {
+            if (index >= questions.length) {
+                showEndScreen(true);
+                return;
+            }
+
+            const q = questions[index];
+            trollHintUsed = false;
+            trollBanner.classList.add('hidden');
+            hintBtn.disabled = false;
+            hintBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+            stageNumEl.textContent = index + 1;
+            questionTextEl.textContent = q.question;
+
+            // Render Base Canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#09090b';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            q.draw(ctx);
+
+            // Handle Mystery Box Locks
+            if (q.isMystery) {
+                setupMysteryStage(q);
+            } else {
+                mysteryOverlay.classList.add('hidden');
+            }
+
+            // Render Options
+            optionsContainer.innerHTML = '';
+            const shuffledOptions = [...q.options].sort(() => Math.random() - 0.5);
+
+            shuffledOptions.forEach((opt) => {
+                const btn = document.createElement('button');
+                btn.className = 'pixel-btn bg-zinc-800 hover:bg-zinc-700 text-zinc-100 p-3 rounded text-left border-2 border-zinc-600 text-xs leading-relaxed transition flex items-center justify-between group';
+                btn.innerHTML = `
+                    <span>${opt.text}</span>
+                    <span class="text-amber-500 opacity-0 group-hover:opacity-100 font-bold">▶</span>
+                `;
+                btn.onclick = () => handleAnswer(opt, q);
+                optionsContainer.appendChild(btn);
+            });
+
+            // Secret title listener for Stage 9
+            const titleEl = document.querySelector('h1');
+            titleEl.onclick = () => {
+                if (questions[currentStage].id === 9) {
+                    unlockMystery();
+                }
+            };
+        }
+
+        function setupMysteryStage(q) {
+            mysteryOverlay.classList.remove('hidden');
+            mysteryHint.textContent = q.mysteryHint;
+            mysteryActionContainer.innerHTML = '';
+
+            if (q.id === 3) {
+                q.clicksDone = 0;
+                canvas.onclick = () => {
+                    q.clicksDone++;
+                    playSound('click');
+                    if (q.clicksDone >= q.clicksRequired) {
+                        unlockMystery();
+                        canvas.onclick = null;
+                    }
+                };
+            } else if (q.id === 6) {
+                hintBtn.onmousedown = hintBtn.ontouchstart = () => {
+                    holdTimer = setTimeout(() => {
+                        unlockMystery();
+                    }, 1500);
+                };
+                hintBtn.onmouseup = hintBtn.ontouchend = () => {
+                    clearTimeout(holdTimer);
+                };
+            } else if (q.id === 12) {
+                const btn = document.createElement('button');
+                btn.className = 'pixel-btn bg-amber-500 text-black px-3 py-1.5 rounded text-[11px] font-bold mt-1';
+                btn.textContent = '🔓 BUKA KOTAK (KLIK)';
+                btn.onclick = () => unlockMystery();
+                mysteryActionContainer.appendChild(btn);
+
+                window.onkeydown = (e) => {
+                    if (e.key.toLowerCase() === 'w') unlockMystery();
+                };
+            } else if (q.id === 15) {
+                q.scratchDone = 0;
+                canvas.onmousemove = canvas.ontouchmove = () => {
+                    q.scratchDone++;
+                    if (q.scratchDone >= q.scratchRequired) {
+                        unlockMystery();
+                        canvas.onmousemove = canvas.ontouchmove = null;
+                    }
+                };
+            }
+        }
+
+        function unlockMystery() {
+            playSound('unlock');
+            mysteryOverlay.classList.add('hidden');
+            window.onkeydown = null;
+        }
+
+        function handleAnswer(selectedOption, questionObj) {
+            playSound('click');
+
+            if (selectedOption.correct) {
+                playSound('correct');
+                score += trollHintUsed ? 50 : 100;
+                scoreDisplay.textContent = score;
+                showDialog("BENAR! 🎯", selectedOption.reason, () => {
+                    currentStage++;
+                    loadStage(currentStage);
+                });
+            } else {
+                playSound('wrong');
+                lives--;
+                updateHearts();
+                gameContainer.classList.add('shake');
+                setTimeout(() => gameContainer.classList.remove('shake'), 300);
+
+                if (lives <= 0) {
+                    showEndScreen(false);
+                } else {
+                    showDialog("SALAH / KENA TIPU! ❌", selectedOption.reason, null);
+                }
+            }
+        }
+
+        function useTrollHint() {
+            playSound('troll');
+            const q = questions[currentStage];
+            trollHintUsed = true;
+            trollBanner.textContent = `🔑 KUNCI BISIKAN: "${q.trollHint}"`;
+            trollBanner.classList.remove('hidden');
+
+            hintBtn.disabled = true;
+            hintBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            showDialog("🔑 KUNCI RAHASIA AKTIF!", "Ingat! Kunci ini dibocorkan oleh intel keliling bawa HT. Jangan salahkan kami kalau jawaban ini 100% menyesatkan!", null);
+        }
+
+        function updateHearts() {
+            let hStr = '';
+            for (let i = 0; i < 3; i++) {
+                hStr += i < lives ? '❤️' : '🖤';
+            }
+            heartsEl.textContent = hStr;
+        }
+
+        function showDialog(title, msg, onClose) {
+            document.getElementById('dialog-title').textContent = title;
+            document.getElementById('dialog-msg').textContent = msg;
+            document.getElementById('dialog-overlay').classList.remove('hidden');
+            onDialogCloseCallback = onClose;
+        }
+
+        function closeDialog() {
+            playSound('click');
+            document.getElementById('dialog-overlay').classList.add('hidden');
+            if (onDialogCloseCallback) {
+                onDialogCloseCallback();
+                onDialogCloseCallback = null;
+            }
+        }
+
+        function showEndScreen(isWin) {
+            const overlay = document.getElementById('gameover-overlay');
+            const title = document.getElementById('end-title');
+            const desc = document.getElementById('end-desc');
+            const finalScore = document.getElementById('final-score');
+
+            finalScore.textContent = score;
+            overlay.classList.remove('hidden');
+
+            if (isWin) {
+                playSound('correct');
+                title.textContent = "SELAMAT! KAMU LULUS UJIAN ABSURD!";
+                title.className = "text-lg md:text-xl text-amber-400 mb-2 font-bold";
+                desc.textContent = "Logika kamu berhasil menembus 20 tebakan kegelapan piksel nyeleneh Indolokal!";
+            } else {
+                playSound('wrong');
+                title.textContent = "GAME OVER";
+                title.className = "text-xl text-red-500 mb-2 font-bold";
+                desc.textContent = "Korban jebakan tebakan lokal berikutnya! Logika wajar tidak berlaku di sini.";
+            }
+        }
+
+        function restartGame() {
+            playSound('click');
+            currentStage = 0;
+            score = 0;
+            lives = 3;
+            scoreDisplay.textContent = score;
+            updateHearts();
+            document.getElementById('gameover-overlay').classList.add('hidden');
+            loadStage(currentStage);
+        }
+
+        window.onload = function() {
+            loadStage(0);
+        };
+    </script>
+</body>
+</html>
